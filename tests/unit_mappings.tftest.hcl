@@ -278,10 +278,31 @@ run "rejects_content_and_generation" {
   expect_failures = [var.secrets]
 }
 
-run "rejects_neither_content_nor_generation" {
+run "valueless_secret_routes_to_ignore_content" {
   command = plan
-  variables { secrets = { s1 = { description = "empty" } } }
-  expect_failures = [var.secrets]
+  variables {
+    secrets = {
+      external = { description = "value written out of band" }
+      managed  = { content = "a" }
+    }
+  }
+
+  assert {
+    condition     = contains(keys(oci_vault_secret.ignore_content), "external") && !contains(keys(oci_vault_secret.this), "external")
+    error_message = "a secret with neither content nor generation must use the ignore-content resource"
+  }
+  assert {
+    condition = (
+      length(oci_vault_secret.ignore_content["external"].secret_content) == 0
+      && length(oci_vault_secret.ignore_content["external"].secret_generation_context) == 0
+      && oci_vault_secret.ignore_content["external"].enable_auto_generation == null
+    )
+    error_message = "a value-less secret must send no content, no generation context and no auto-generation flag"
+  }
+  assert {
+    condition     = contains(keys(oci_vault_secret.this), "managed")
+    error_message = "secrets with content must stay in the managed resource"
+  }
 }
 
 run "rejects_passphrase_length_on_non_passphrase" {

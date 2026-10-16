@@ -1,7 +1,7 @@
 # Secrets Manager (AWS) to Vault Secret (OCI) feature parity
 
 Comparison against [`terraform-aws-modules/secrets-manager`](https://github.com/terraform-aws-modules/terraform-aws-secrets-manager)
-v2.1.0. That module manages **one** secret: the secret container, one secret
+v2.2.0. That module manages **one** secret: the secret container, one secret
 version (its value), an optional resource policy, and optional Lambda-driven
 rotation. This module manages a **map** of `oci_vault_secret` resources inside a
 vault you pass in.
@@ -104,6 +104,7 @@ variant and an `ephemeral.random_password`). OCI: the `secret_content` or
 | Set a string value            | `secret_string`                        | `secrets[*].content` (module base64-encodes it) | mapped |
 | Set a binary value            | `secret_binary` (base64)               | `secrets[*].content` + `content_type` (backlog) | backlog |
 | Write-only value (not in state) | `secret_string_wo` (1.11+, ephemeral) | none (the OCI provider has no write-only arg) | n/a    |
+| Skip version management       | `create_secret_version = false`        | leave both `content` and `generation` unset (per secret) | mapped (per secret) |
 | Generate a value              | `create_random_password` + `ephemeral.random_password` | `secrets[*].generation` (`secret_generation_context`) | mapped (richer) |
 | Random password length / chars | `random_password_length`, `random_password_override_special` | `generation.passphrase_length`, `generation.secret_template` | mapped |
 | Staging labels                | `version_stages`                       | none - the module always writes the current version | backlog (`stage = PENDING`) |
@@ -199,6 +200,7 @@ Equivalent concept, different name. Anything not listed maps by an identical nam
 | `secret_string`              | `secrets[*].content`             | module base64-encodes; lands in state either way             |
 | `secret_binary`              | `secrets[*].content` (backlog)   | binary content type not exposed yet                          |
 | `secret_string_wo`           | none                             | no write-only arg in the OCI provider                        |
+| `create_secret_version`      | `secrets[*]` with neither `content` nor `generation` | per secret rather than module-wide; such secrets never reconcile content |
 | `create_random_password`, `random_password_*` | `secrets[*].generation` | OCI generates the value server-side                     |
 | `ignore_secret_changes`      | `secrets[*].ignore_content_changes` |                                                          |
 | `version_stages`             | none                            | the module always writes the current version                 |

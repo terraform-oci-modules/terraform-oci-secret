@@ -85,7 +85,11 @@ variable "secrets" {
                      it sensitive so it is redacted in plan output. NOTE: the
                      value is still stored in Terraform state - the OCI provider
                      has no write-only argument. Mutually exclusive with
-                     `generation`.
+                     `generation`. Leave both unset to create the secret with
+                     no value from Terraform, for values written out of band
+                     (manually, by CI, or by another process); Terraform then
+                     never reconciles its content. Adding `content` to such a
+                     secret later replaces it (see the README).
       generation   : have OCI generate the value instead of passing `content`:
                        generation_type     : PASSPHRASE | SSH_KEY | BYTES
                        generation_template : must match generation_type -
@@ -161,10 +165,6 @@ variable "secrets" {
   validation {
     condition     = alltrue([for k, v in var.secrets : !(v.content != null && v.generation != null)])
     error_message = "secrets[*] cannot set both content and generation."
-  }
-  validation {
-    condition     = alltrue([for k, v in var.secrets : v.content != null || v.generation != null])
-    error_message = "secrets[*] must set exactly one of content or generation."
   }
   validation {
     condition = alltrue([
