@@ -169,94 +169,91 @@ variable "secrets" {
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.generation == null || contains(["PASSPHRASE", "SSH_KEY", "BYTES"], v.generation.generation_type)
+      v.generation == null ? true : (contains(["PASSPHRASE", "SSH_KEY", "BYTES"], v.generation.generation_type))
     ])
     error_message = "secrets[*].generation.generation_type must be PASSPHRASE, SSH_KEY, or BYTES."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.generation == null || v.generation.generation_type != "PASSPHRASE" || contains(["SECRETS_DEFAULT_PASSWORD", "DBAAS_DEFAULT_PASSWORD"], v.generation.generation_template)
+      v.generation == null ? true : (v.generation.generation_type != "PASSPHRASE" || contains(["SECRETS_DEFAULT_PASSWORD", "DBAAS_DEFAULT_PASSWORD"], v.generation.generation_template))
     ])
     error_message = "secrets[*].generation.generation_template for PASSPHRASE must be SECRETS_DEFAULT_PASSWORD or DBAAS_DEFAULT_PASSWORD."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.generation == null || v.generation.generation_type != "SSH_KEY" || contains(["RSA_2048", "RSA_3072", "RSA_4096"], v.generation.generation_template)
+      v.generation == null ? true : (v.generation.generation_type != "SSH_KEY" || contains(["RSA_2048", "RSA_3072", "RSA_4096"], v.generation.generation_template))
     ])
     error_message = "secrets[*].generation.generation_template for SSH_KEY must be RSA_2048, RSA_3072, or RSA_4096."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.generation == null || v.generation.generation_type != "BYTES" || contains(["BYTES_512", "BYTES_1024"], v.generation.generation_template)
+      v.generation == null ? true : (v.generation.generation_type != "BYTES" || contains(["BYTES_512", "BYTES_1024"], v.generation.generation_template))
     ])
     error_message = "secrets[*].generation.generation_template for BYTES must be BYTES_512 or BYTES_1024."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.generation == null || v.generation.passphrase_length == null || v.generation.generation_type == "PASSPHRASE"
+      v.generation == null ? true : (v.generation.passphrase_length == null || v.generation.generation_type == "PASSPHRASE")
     ])
     error_message = "secrets[*].generation.passphrase_length is only valid when generation_type is PASSPHRASE."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.rotation == null || contains(["ADB", "FUNCTION"], v.rotation.target_system_type)
+      v.rotation == null ? true : (contains(["ADB", "FUNCTION"], v.rotation.target_system_type))
     ])
     error_message = "secrets[*].rotation.target_system_type must be ADB or FUNCTION."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.rotation == null || v.rotation.target_system_type != "ADB" || v.rotation.adb_id != null
+      v.rotation == null ? true : (v.rotation.target_system_type != "ADB" || v.rotation.adb_id != null)
     ])
     error_message = "secrets[*].rotation with target_system_type = ADB requires adb_id."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.rotation == null || v.rotation.target_system_type != "FUNCTION" || v.rotation.function_id != null
+      v.rotation == null ? true : (v.rotation.target_system_type != "FUNCTION" || v.rotation.function_id != null)
     ])
     error_message = "secrets[*].rotation with target_system_type = FUNCTION requires function_id."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.rotation == null || v.rotation.rotation_interval == null ||
-      try(tonumber(regex("^P([0-9]+)D$", v.rotation.rotation_interval)[0]) >= 1 && tonumber(regex("^P([0-9]+)D$", v.rotation.rotation_interval)[0]) <= 360, false)
+      v.rotation == null ? true : (v.rotation.rotation_interval == null || try(tonumber(regex("^P([0-9]+)D$", v.rotation.rotation_interval)[0]) >= 1 && tonumber(regex("^P([0-9]+)D$", v.rotation.rotation_interval)[0]) <= 360, false))
     ])
     error_message = "secrets[*].rotation.rotation_interval must be an ISO 8601 day duration from P1D to P360D (e.g. P30D)."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.expiry_rule == null || v.expiry_rule.version_expiry_interval == null ||
-      try(tonumber(regex("^P([0-9]+)D$", v.expiry_rule.version_expiry_interval)[0]) >= 1 && tonumber(regex("^P([0-9]+)D$", v.expiry_rule.version_expiry_interval)[0]) <= 90, false)
+      v.expiry_rule == null ? true : (v.expiry_rule.version_expiry_interval == null || try(tonumber(regex("^P([0-9]+)D$", v.expiry_rule.version_expiry_interval)[0]) >= 1 && tonumber(regex("^P([0-9]+)D$", v.expiry_rule.version_expiry_interval)[0]) <= 90, false))
     ])
     error_message = "secrets[*].expiry_rule.version_expiry_interval must be an ISO 8601 day duration from P1D to P90D (e.g. P7D)."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.expiry_rule == null || v.expiry_rule.time_of_absolute_expiry == null ||
-      can(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$", v.expiry_rule.time_of_absolute_expiry))
+      v.expiry_rule == null ? true : (v.expiry_rule.time_of_absolute_expiry == null || can(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$", v.expiry_rule.time_of_absolute_expiry)))
     ])
     error_message = "secrets[*].expiry_rule.time_of_absolute_expiry must be an RFC 3339 timestamp."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.expiry_rule == null || !(v.expiry_rule.version_expiry_interval != null && v.expiry_rule.time_of_absolute_expiry != null)
+      v.expiry_rule == null ? true : (!(v.expiry_rule.version_expiry_interval != null && v.expiry_rule.time_of_absolute_expiry != null))
     ])
     error_message = "secrets[*].expiry_rule cannot set both version_expiry_interval and time_of_absolute_expiry."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.replication == null || length(v.replication.targets) > 0
+      v.replication == null ? true : (length(v.replication.targets) > 0)
     ])
     error_message = "secrets[*].replication.targets must not be empty."
   }
