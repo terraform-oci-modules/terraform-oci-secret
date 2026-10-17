@@ -396,3 +396,37 @@ run "rejects_empty_replication_targets" {
   }
   expect_failures = [var.secrets]
 }
+
+# --- unset true/false settings are sent as false ---------------------------
+
+run "unset_flags_are_sent_as_false" {
+  command = plan
+
+  variables {
+    secrets = {
+      s1 = {
+        content     = "a"
+        expiry_rule = { version_expiry_interval = "P7D" }
+        reuse_rule  = {}
+      }
+      r1 = {
+        rotation = { target_system_type = "FUNCTION", function_id = "ocid1.fnfunc.oc1.iad.aaaaaaaaunitfn" }
+      }
+    }
+  }
+
+  # These are Optional+Computed in the provider: null keeps the current value,
+  # so the module must send false for removing a flag to turn it off.
+  assert {
+    condition     = one([for r in oci_vault_secret.this["s1"].secret_rules : r.is_secret_content_retrieval_blocked_on_expiry if r.rule_type == "SECRET_EXPIRY_RULE"]) == false
+    error_message = "an unset block_content_retrieval_on_expiry must be sent as false"
+  }
+  assert {
+    condition     = one([for r in oci_vault_secret.this["s1"].secret_rules : r.is_enforced_on_deleted_secret_versions if r.rule_type == "SECRET_REUSE_RULE"]) == false
+    error_message = "an unset enforce_on_deleted_versions must be sent as false"
+  }
+  assert {
+    condition     = oci_vault_secret.ignore_content["r1"].rotation_config[0].is_scheduled_rotation_enabled == false
+    error_message = "an unset is_scheduled_rotation_enabled must be sent as false"
+  }
+}

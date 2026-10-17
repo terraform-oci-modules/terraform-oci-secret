@@ -103,14 +103,19 @@ variable "secrets" {
                        target_system_type            : ADB | FUNCTION
                        adb_id / function_id          : the target OCID
                        rotation_interval             : ISO 8601, P1D to P360D
-                       is_scheduled_rotation_enabled : turn the schedule on
+                       is_scheduled_rotation_enabled : turn the schedule on (default false)
       expiry_rule  : version_expiry_interval (ISO 8601, P1D to P90D) OR
-                     time_of_absolute_expiry (RFC 3339); block_content_retrieval_on_expiry.
-      reuse_rule   : enforce_on_deleted_versions - forbid reusing previous content.
+                     time_of_absolute_expiry (RFC 3339); block_content_retrieval_on_expiry
+                     (default false).
+      reuse_rule   : enforce_on_deleted_versions (default false) - forbid reusing
+                     previous content.
       replication  : cross-region replica config (needs a target vault + key per region):
                        is_write_forward_enabled
                        targets : list of { target_region, target_key_id, target_vault_id }
       timeouts     : create / update / delete timeout overrides.
+
+    Removing description, metadata, rotation_interval or the last rule from an
+    existing secret keeps the current value in OCI; see the README.
       tags / defined_tags : per-secret tags, merged over var.tags / var.defined_tags.
   EOT
   type = map(object({
@@ -129,15 +134,15 @@ variable "secrets" {
       adb_id                        = optional(string)
       function_id                   = optional(string)
       rotation_interval             = optional(string)
-      is_scheduled_rotation_enabled = optional(bool)
+      is_scheduled_rotation_enabled = optional(bool, false)
     }))
     expiry_rule = optional(object({
       version_expiry_interval           = optional(string)
       time_of_absolute_expiry           = optional(string)
-      block_content_retrieval_on_expiry = optional(bool)
+      block_content_retrieval_on_expiry = optional(bool, false)
     }))
     reuse_rule = optional(object({
-      enforce_on_deleted_versions = optional(bool)
+      enforce_on_deleted_versions = optional(bool, false)
     }))
     replication = optional(object({
       is_write_forward_enabled = optional(bool)
