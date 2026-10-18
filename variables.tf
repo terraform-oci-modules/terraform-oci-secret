@@ -85,7 +85,11 @@ variable "secrets" {
                      it sensitive so it is redacted in plan output. NOTE: the
                      value is still stored in Terraform state - the OCI provider
                      has no write-only argument. Mutually exclusive with
-                     `generation`.
+                     `generation`. Leave both unset to create the secret with
+                     no value from Terraform, for values written out of band
+                     (manually, by CI, or by another process); Terraform then
+                     never reconciles its content. Adding `content` to such a
+                     secret later replaces it (see the README).
       generation   : have OCI generate the value instead of passing `content`:
                        generation_type     : PASSPHRASE | SSH_KEY | BYTES
                        generation_template : must match generation_type -
@@ -99,14 +103,19 @@ variable "secrets" {
                        target_system_type            : ADB | FUNCTION
                        adb_id / function_id          : the target OCID
                        rotation_interval             : ISO 8601, P1D to P360D
-                       is_scheduled_rotation_enabled : turn the schedule on
+                       is_scheduled_rotation_enabled : turn the schedule on (default false)
       expiry_rule  : version_expiry_interval (ISO 8601, P1D to P90D) OR
-                     time_of_absolute_expiry (RFC 3339); block_content_retrieval_on_expiry.
-      reuse_rule   : enforce_on_deleted_versions - forbid reusing previous content.
+                     time_of_absolute_expiry (RFC 3339); block_content_retrieval_on_expiry
+                     (default false).
+      reuse_rule   : enforce_on_deleted_versions (default false) - forbid reusing
+                     previous content.
       replication  : cross-region replica config (needs a target vault + key per region):
                        is_write_forward_enabled
                        targets : list of { target_region, target_key_id, target_vault_id }
       timeouts     : create / update / delete timeout overrides.
+
+    Removing description, metadata, rotation_interval or the last rule from an
+    existing secret keeps the current value in OCI; see the README.
       tags / defined_tags : per-secret tags, merged over var.tags / var.defined_tags.
   EOT
   type = map(object({
@@ -125,15 +134,15 @@ variable "secrets" {
       adb_id                        = optional(string)
       function_id                   = optional(string)
       rotation_interval             = optional(string)
-      is_scheduled_rotation_enabled = optional(bool)
+      is_scheduled_rotation_enabled = optional(bool, false)
     }))
     expiry_rule = optional(object({
       version_expiry_interval           = optional(string)
       time_of_absolute_expiry           = optional(string)
-      block_content_retrieval_on_expiry = optional(bool)
+      block_content_retrieval_on_expiry = optional(bool, false)
     }))
     reuse_rule = optional(object({
-      enforce_on_deleted_versions = optional(bool)
+      enforce_on_deleted_versions = optional(bool, false)
     }))
     replication = optional(object({
       is_write_forward_enabled = optional(bool)
@@ -163,100 +172,93 @@ variable "secrets" {
     error_message = "secrets[*] cannot set both content and generation."
   }
   validation {
-    condition     = alltrue([for k, v in var.secrets : v.content != null || v.generation != null])
-    error_message = "secrets[*] must set exactly one of content or generation."
-  }
-  validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.generation == null || contains(["PASSPHRASE", "SSH_KEY", "BYTES"], v.generation.generation_type)
+      v.generation == null ? true : (contains(["PASSPHRASE", "SSH_KEY", "BYTES"], v.generation.generation_type))
     ])
     error_message = "secrets[*].generation.generation_type must be PASSPHRASE, SSH_KEY, or BYTES."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.generation == null || v.generation.generation_type != "PASSPHRASE" || contains(["SECRETS_DEFAULT_PASSWORD", "DBAAS_DEFAULT_PASSWORD"], v.generation.generation_template)
+      v.generation == null ? true : (v.generation.generation_type != "PASSPHRASE" || contains(["SECRETS_DEFAULT_PASSWORD", "DBAAS_DEFAULT_PASSWORD"], v.generation.generation_template))
     ])
     error_message = "secrets[*].generation.generation_template for PASSPHRASE must be SECRETS_DEFAULT_PASSWORD or DBAAS_DEFAULT_PASSWORD."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.generation == null || v.generation.generation_type != "SSH_KEY" || contains(["RSA_2048", "RSA_3072", "RSA_4096"], v.generation.generation_template)
+      v.generation == null ? true : (v.generation.generation_type != "SSH_KEY" || contains(["RSA_2048", "RSA_3072", "RSA_4096"], v.generation.generation_template))
     ])
     error_message = "secrets[*].generation.generation_template for SSH_KEY must be RSA_2048, RSA_3072, or RSA_4096."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.generation == null || v.generation.generation_type != "BYTES" || contains(["BYTES_512", "BYTES_1024"], v.generation.generation_template)
+      v.generation == null ? true : (v.generation.generation_type != "BYTES" || contains(["BYTES_512", "BYTES_1024"], v.generation.generation_template))
     ])
     error_message = "secrets[*].generation.generation_template for BYTES must be BYTES_512 or BYTES_1024."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.generation == null || v.generation.passphrase_length == null || v.generation.generation_type == "PASSPHRASE"
+      v.generation == null ? true : (v.generation.passphrase_length == null || v.generation.generation_type == "PASSPHRASE")
     ])
     error_message = "secrets[*].generation.passphrase_length is only valid when generation_type is PASSPHRASE."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.rotation == null || contains(["ADB", "FUNCTION"], v.rotation.target_system_type)
+      v.rotation == null ? true : (contains(["ADB", "FUNCTION"], v.rotation.target_system_type))
     ])
     error_message = "secrets[*].rotation.target_system_type must be ADB or FUNCTION."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.rotation == null || v.rotation.target_system_type != "ADB" || v.rotation.adb_id != null
+      v.rotation == null ? true : (v.rotation.target_system_type != "ADB" || v.rotation.adb_id != null)
     ])
     error_message = "secrets[*].rotation with target_system_type = ADB requires adb_id."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.rotation == null || v.rotation.target_system_type != "FUNCTION" || v.rotation.function_id != null
+      v.rotation == null ? true : (v.rotation.target_system_type != "FUNCTION" || v.rotation.function_id != null)
     ])
     error_message = "secrets[*].rotation with target_system_type = FUNCTION requires function_id."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.rotation == null || v.rotation.rotation_interval == null ||
-      try(tonumber(regex("^P([0-9]+)D$", v.rotation.rotation_interval)[0]) >= 1 && tonumber(regex("^P([0-9]+)D$", v.rotation.rotation_interval)[0]) <= 360, false)
+      v.rotation == null ? true : (v.rotation.rotation_interval == null || try(tonumber(regex("^P([0-9]+)D$", v.rotation.rotation_interval)[0]) >= 1 && tonumber(regex("^P([0-9]+)D$", v.rotation.rotation_interval)[0]) <= 360, false))
     ])
     error_message = "secrets[*].rotation.rotation_interval must be an ISO 8601 day duration from P1D to P360D (e.g. P30D)."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.expiry_rule == null || v.expiry_rule.version_expiry_interval == null ||
-      try(tonumber(regex("^P([0-9]+)D$", v.expiry_rule.version_expiry_interval)[0]) >= 1 && tonumber(regex("^P([0-9]+)D$", v.expiry_rule.version_expiry_interval)[0]) <= 90, false)
+      v.expiry_rule == null ? true : (v.expiry_rule.version_expiry_interval == null || try(tonumber(regex("^P([0-9]+)D$", v.expiry_rule.version_expiry_interval)[0]) >= 1 && tonumber(regex("^P([0-9]+)D$", v.expiry_rule.version_expiry_interval)[0]) <= 90, false))
     ])
     error_message = "secrets[*].expiry_rule.version_expiry_interval must be an ISO 8601 day duration from P1D to P90D (e.g. P7D)."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.expiry_rule == null || v.expiry_rule.time_of_absolute_expiry == null ||
-      can(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$", v.expiry_rule.time_of_absolute_expiry))
+      v.expiry_rule == null ? true : (v.expiry_rule.time_of_absolute_expiry == null || can(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$", v.expiry_rule.time_of_absolute_expiry)))
     ])
     error_message = "secrets[*].expiry_rule.time_of_absolute_expiry must be an RFC 3339 timestamp."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.expiry_rule == null || !(v.expiry_rule.version_expiry_interval != null && v.expiry_rule.time_of_absolute_expiry != null)
+      v.expiry_rule == null ? true : (!(v.expiry_rule.version_expiry_interval != null && v.expiry_rule.time_of_absolute_expiry != null))
     ])
     error_message = "secrets[*].expiry_rule cannot set both version_expiry_interval and time_of_absolute_expiry."
   }
   validation {
     condition = alltrue([
       for k, v in var.secrets :
-      v.replication == null || length(v.replication.targets) > 0
+      v.replication == null ? true : (length(v.replication.targets) > 0)
     ])
     error_message = "secrets[*].replication.targets must not be empty."
   }

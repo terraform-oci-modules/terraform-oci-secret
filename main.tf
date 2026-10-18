@@ -4,16 +4,15 @@ locals {
   secrets = local.create ? var.secrets : {}
 
   # A secret whose content Terraform keeps reconciling vs. one it leaves alone
-  # after create. Rotation always implies "leave alone" (the target system
-  # changes the value out of band); var.ignore_content_changes forces it for all.
-  managed_secrets = {
-    for k, v in local.secrets : k => v
-    if !(var.ignore_content_changes || v.rotation != null)
+  # after create. Rotation and value-less secrets always imply "leave alone"
+  # (the value is set out of band); var.ignore_content_changes forces it for all.
+  ignore_content = {
+    for k, v in local.secrets : k => (
+      var.ignore_content_changes || v.rotation != null || (v.content == null && v.generation == null)
+    )
   }
-  ignored_secrets = {
-    for k, v in local.secrets : k => v
-    if var.ignore_content_changes || v.rotation != null
-  }
+  managed_secrets = { for k, v in local.secrets : k => v if !local.ignore_content[k] }
+  ignored_secrets = { for k, v in local.secrets : k => v if local.ignore_content[k] }
 
   all_secrets = merge(oci_vault_secret.this, oci_vault_secret.ignore_content)
 }

@@ -278,10 +278,31 @@ run "rejects_content_and_generation" {
   expect_failures = [var.secrets]
 }
 
-run "rejects_neither_content_nor_generation" {
+run "valueless_secret_routes_to_ignore_content" {
   command = plan
-  variables { secrets = { s1 = { description = "empty" } } }
-  expect_failures = [var.secrets]
+  variables {
+    secrets = {
+      external = { description = "value written out of band" }
+      managed  = { content = "a" }
+    }
+  }
+
+  assert {
+    condition     = contains(keys(oci_vault_secret.ignore_content), "external") && !contains(keys(oci_vault_secret.this), "external")
+    error_message = "a secret with neither content nor generation must use the ignore-content resource"
+  }
+  assert {
+    condition = (
+      length(oci_vault_secret.ignore_content["external"].secret_content) == 0
+      && length(oci_vault_secret.ignore_content["external"].secret_generation_context) == 0
+      && oci_vault_secret.ignore_content["external"].enable_auto_generation == null
+    )
+    error_message = "a value-less secret must send no content, no generation context and no auto-generation flag"
+  }
+  assert {
+    condition     = contains(keys(oci_vault_secret.this), "managed")
+    error_message = "secrets with content must stay in the managed resource"
+  }
 }
 
 run "rejects_passphrase_length_on_non_passphrase" {
@@ -374,4 +395,38 @@ run "rejects_empty_replication_targets" {
     secrets = { s1 = { content = "a", replication = { targets = [] } } }
   }
   expect_failures = [var.secrets]
+}
+
+# --- unset true/false settings are sent as false ---------------------------
+
+run "unset_flags_are_sent_as_false" {
+  command = plan
+
+  variables {
+    secrets = {
+      s1 = {
+        content     = "a"
+        expiry_rule = { version_expiry_interval = "P7D" }
+        reuse_rule  = {}
+      }
+      r1 = {
+        rotation = { target_system_type = "FUNCTION", function_id = "ocid1.fnfunc.oc1.iad.aaaaaaaaunitfn" }
+      }
+    }
+  }
+
+  # These are Optional+Computed in the provider: null keeps the current value,
+  # so the module must send false for removing a flag to turn it off.
+  assert {
+    condition     = one([for r in oci_vault_secret.this["s1"].secret_rules : r.is_secret_content_retrieval_blocked_on_expiry if r.rule_type == "SECRET_EXPIRY_RULE"]) == false
+    error_message = "an unset block_content_retrieval_on_expiry must be sent as false"
+  }
+  assert {
+    condition     = one([for r in oci_vault_secret.this["s1"].secret_rules : r.is_enforced_on_deleted_secret_versions if r.rule_type == "SECRET_REUSE_RULE"]) == false
+    error_message = "an unset enforce_on_deleted_versions must be sent as false"
+  }
+  assert {
+    condition     = oci_vault_secret.ignore_content["r1"].rotation_config[0].is_scheduled_rotation_enabled == false
+    error_message = "an unset is_scheduled_rotation_enabled must be sent as false"
+  }
 }
